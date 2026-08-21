@@ -7,6 +7,11 @@ backend/artifacts/
 # Node
 frontend/node_modules/
 frontend/dist/
+# Exclude the lockfile + any npm config: they may pin a private registry that
+# is unreachable inside the Docker build. The image resolves against the
+# public registry instead (see Dockerfile).
+frontend/package-lock.json
+**/.npmrc
 
 # Misc
 .git/

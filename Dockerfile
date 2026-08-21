@@ -5,8 +5,11 @@
 # ------------------------------------------------------------------ #
 FROM node:20-alpine AS frontend
 WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm install
+# Only copy package.json (the lockfile is .dockerignore'd because it may pin a
+# private registry that isn't reachable from inside the build).
+COPY frontend/package.json ./
+# Force the public npm registry so the build never inherits a private one.
+RUN npm install --registry=https://registry.npmjs.org/ --no-audit --no-fund
 COPY frontend/ ./
 # Same-origin deploy: the API is served from the same host, so relative
 # /api URLs work. (For a split deploy, pass VITE_API_URL at build time.)
