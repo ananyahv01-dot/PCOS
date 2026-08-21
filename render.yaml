@@ -1,0 +1,26 @@
+# Render Blueprint — free single-service deployment.
+# FastAPI serves both the API and the built React frontend.
+#
+# Deploy:
+#   1. Push this repo to GitHub.
+#   2. On https://render.com → New → Blueprint → pick this repo.
+#   3. Set the two secret env vars when prompted, then Apply.
+#   4. First build takes a few minutes (installs deps + trains the model).
+#
+# Note: the free plan has an ephemeral filesystem, so the SQLite database and
+# uploaded prescriptions reset on each deploy/restart. For persistence, attach
+# a managed Postgres (Neon/Supabase) and object storage (see README).
+services:
+  - type: web
+    name: pcos-care-ai
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: PCOS_ADMIN_PASS
+        sync: false          # set your own admin password in the dashboard
+      - key: PCOS_DOCTOR_PASS
+        sync: false          # set your own doctor password in the dashboard
+      - key: ALLOWED_ORIGINS
+        value: "*"

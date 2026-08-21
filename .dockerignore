@@ -1,0 +1,16 @@
+# Python
+**/__pycache__/
+**/*.pyc
+backend/.venv/
+backend/artifacts/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Misc
+.git/
+.gitignore
+*.md
+.env
+.env.*
