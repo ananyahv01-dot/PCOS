@@ -10,6 +10,26 @@ const RISK_COLORS = {
   High: "#dc2626",
 };
 
+// Human-readable labels + ordering for the patient's questionnaire answers.
+const NUMERIC_FIELDS = [
+  ["age", "Age (years)"],
+  ["weight_kg", "Weight (kg)"],
+  ["height_cm", "Height (cm)"],
+  ["cycle_length", "Avg. cycle length (days)"],
+];
+const BOOLEAN_FIELDS = [
+  ["cycle_irregular", "Irregular menstrual cycles"],
+  ["weight_gain", "Recent unexplained weight gain"],
+  ["hair_growth", "Excess hair growth (face/body)"],
+  ["skin_darkening", "Skin darkening (neck/underarms)"],
+  ["hair_loss", "Hair loss / thinning on scalp"],
+  ["pimples", "Frequent acne / pimples"],
+  ["fast_food", "Frequent fast food"],
+  ["exercise", "Regular exercise"],
+  ["mood_swings", "Frequent mood swings"],
+  ["family_history", "Family history of PCOS"],
+];
+
 function escapeHtml(str = "") {
   return String(str)
     .replace(/&/g, "&amp;")
@@ -17,7 +37,29 @@ function escapeHtml(str = "") {
     .replace(/>/g, "&gt;");
 }
 
-export function downloadReport({ result, name }) {
+function buildResponses(responses) {
+  if (!responses) return "";
+
+  const row = (label, value, isYes) => `
+    <div class="resp">
+      <span class="resp-k">${escapeHtml(label)}</span>
+      <span class="resp-v${isYes ? " yes" : ""}">${escapeHtml(String(value))}</span>
+    </div>`;
+
+  const numeric = NUMERIC_FIELDS.filter(([k]) => responses[k] != null)
+    .map(([k, label]) => row(label, responses[k], false))
+    .join("");
+
+  const boolean = BOOLEAN_FIELDS.filter(([k]) => k in responses)
+    .map(([k, label]) => row(label, responses[k] ? "Yes" : "No", !!responses[k]))
+    .join("");
+
+  return `
+    <h2>Assessment responses</h2>
+    <div class="resp-grid">${numeric}${boolean}</div>`;
+}
+
+export function downloadReport({ result, name, responses }) {
   const { risk_level, probability, bmi, recommendations, disclaimer } = result;
   const pct = Math.round(probability * 100);
   const color = RISK_COLORS[risk_level] || "#334155";
@@ -83,6 +125,17 @@ export function downloadReport({ result, name }) {
   }
   .rec-title { font-weight: 700; font-size: 13px; }
   .rec-detail { font-size: 12px; color: #475569; margin-top: 2px; line-height: 1.5; }
+  .resp-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px;
+  }
+  .resp {
+    display: flex; justify-content: space-between; gap: 10px;
+    border-bottom: 1px solid #f1f5f9; padding: 6px 0; font-size: 12px;
+    page-break-inside: avoid;
+  }
+  .resp-k { color: #475569; }
+  .resp-v { font-weight: 600; color: #1e293b; }
+  .resp-v.yes { color: #be185d; }
   .disclaimer {
     margin-top: 24px; border: 1px solid #fcd34d; background: #fffbeb;
     color: #92400e; font-size: 11px; line-height: 1.5; padding: 12px 14px;
@@ -121,6 +174,8 @@ export function downloadReport({ result, name }) {
       <div class="v">${bmi}</div>
     </div>
   </div>
+
+  ${buildResponses(responses)}
 
   <h2>Personalized recommendations</h2>
   ${recRows}

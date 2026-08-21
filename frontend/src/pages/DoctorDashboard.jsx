@@ -137,7 +137,11 @@ export default function DoctorDashboard() {
     setBusyReport(row.id);
     try {
       const detail = await getAssessment(row.id);
-      downloadReport({ result: detail, name: detail.name });
+      downloadReport({
+        result: detail,
+        name: detail.name,
+        responses: detail.responses,
+      });
     } catch {
       setError("Could not generate the report for this assessment.");
     } finally {

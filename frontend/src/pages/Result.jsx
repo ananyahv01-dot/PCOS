@@ -17,6 +17,7 @@ export default function Result() {
   const { state } = useLocation();
   const result = state?.result;
   const name = state?.name?.trim();
+  const responses = state?.form;
 
   // If the user navigates here directly without a result, send them back.
   if (!result) return <Navigate to="/assessment" replace />;
@@ -31,7 +32,7 @@ export default function Result() {
         </h1>
         <button
           className="btn-primary"
-          onClick={() => downloadReport({ result, name })}
+          onClick={() => downloadReport({ result, name, responses })}
         >
           <Download size={18} /> Download PDF report
         </button>

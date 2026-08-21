@@ -224,6 +224,7 @@ def assessment_detail(assessment_id: int,
         raise HTTPException(status_code=403, detail="Not authorised to view this record.")
 
     recommendations = json.loads(record["recommendations"]) if record.get("recommendations") else []
+    responses = json.loads(record["details"]) if record.get("details") else None
     return {
         "id": record["id"],
         "created_at": record["created_at"],
@@ -233,6 +234,7 @@ def assessment_detail(assessment_id: int,
         "probability": record["probability"],
         "risk_level": record["risk_level"],
         "recommendations": recommendations,
+        "responses": responses,
         "disclaimer": DISCLAIMER,
     }
 
