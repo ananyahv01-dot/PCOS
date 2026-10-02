@@ -14,7 +14,7 @@ lifestyle inputs and returns a risk estimate plus general wellness guidance.
 
 ```
 React + Vite frontend  ──HTTP──▶  FastAPI backend  ──▶  Random Forest model
-     (Tailwind)                     (scikit-learn)         (+ SQLite log)
+     (Tailwind)                     (scikit-learn)         (+ MySQL log)
 ```
 
 | Layer            | Technology                                |
@@ -23,7 +23,7 @@ React + Vite frontend  ──HTTP──▶  FastAPI backend  ──▶  Random F
 | Backend / API    | FastAPI (Python)                          |
 | Machine Learning | scikit-learn — RandomForestClassifier     |
 | Data processing  | Pandas, NumPy                             |
-| Storage          | SQLite (swap for MongoDB/MySQL later)     |
+| Storage          | MySQL (e.g. the one bundled with XAMPP)   |
 
 ---
 
@@ -39,7 +39,7 @@ AI/
 │  │  ├─ features.py        Shared feature contract & BMI helper
 │  │  ├─ recommendations.py Rule-based lifestyle guidance
 │  │  ├─ schemas.py         Pydantic request/response models
-│  │  └─ db.py              SQLite prediction logging
+│  │  └─ db.py              MySQL prediction logging
 │  ├─ train.py              Standalone training script
 │  ├─ requirements.txt
 │  └─ artifacts/            (generated) model + metrics + db
@@ -55,7 +55,73 @@ AI/
 
 ---
 
-## 1. Run the backend
+## Quick start — Docker Compose (recommended)
+
+The simplest way to run everything is `docker compose`, which builds the app
+(FastAPI + the built React frontend, served from one process) and starts a
+MySQL container alongside it — no XAMPP install, no separate frontend/backend
+terminals:
+
+```bash
+docker compose up --build
+# open http://localhost:8000
+```
+
+This starts three containers:
+
+- **mysql** — official `mysql:8.0` image, replacing XAMPP's MySQL for this
+  setup; its data persists in a named Docker volume (`mysql_data`) across
+  restarts. Root password is set via `MYSQL_ROOT_PASSWORD` in
+  [docker-compose.yml](docker-compose.yml) (change it before any shared/
+  non-local use).
+- **app** — the existing single-service image (see [Dockerfile](Dockerfile)),
+  pointed at the `mysql` container via `DB_HOST=mysql`.
+- **adminer** — a browser-based MySQL admin UI (the XAMPP phpMyAdmin
+  equivalent) at [http://localhost:8080](http://localhost:8080). Log in with
+  System `MySQL`, Server `mysql`, and the same user/password/database as the
+  `app` service's `DB_*` env vars in `docker-compose.yml`.
+
+Override the demo admin/doctor passwords by exporting `PCOS_ADMIN_PASS` /
+`PCOS_DOCTOR_PASS` before running `docker compose up`, or editing
+`docker-compose.yml` directly.
+
+To stop everything: `docker compose down` (add `-v` to also wipe the MySQL
+volume and start fresh next time).
+
+> Prefer to develop with hot-reload instead? Use the manual setup below —
+> it runs the frontend/backend as separate dev servers against either XAMPP's
+> MySQL or the same `docker compose up mysql` container (just that one
+> service, with `DB_HOST=127.0.0.1` since it's reached from outside Docker).
+
+---
+
+## Manual setup (hot-reload for active development)
+
+### 1. Start MySQL (XAMPP)
+
+The backend logs predictions/prescriptions and stores user accounts in
+MySQL. The easiest way to get one locally is [XAMPP](https://www.apachefriends.org/):
+
+1. Install XAMPP and open the **XAMPP Control Panel**.
+2. Click **Start** next to **MySQL** (you don't need to start Apache — the
+   Python backend serves the API itself).
+3. That's it — on first run the backend automatically creates the
+   `pcos_care` database and its tables against XAMPP's default MySQL
+   credentials (host `127.0.0.1`, port `3306`, user `root`, no password).
+
+Using a different MySQL host/user/password, or a non-XAMPP MySQL/MariaDB
+server? Override it with env vars before starting the backend:
+
+```bash
+# Windows PowerShell
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3306"
+$env:DB_USER = "root"
+$env:DB_PASSWORD = ""
+$env:DB_NAME = "pcos_care"
+```
+
+### 2. Run the backend
 
 Requires **Python 3.10+**.
 
@@ -77,7 +143,7 @@ python train.py
 uvicorn app.main:app --reload
 ```
 
-## 2. Run the frontend
+### 3. Run the frontend
 
 Requires **Node.js 18+**.
 
@@ -93,27 +159,59 @@ setup is needed in development.
 
 ---
 
-## Admin dashboard
+## Roles & demo accounts
 
-- Visit **/admin** and log in with the demo credentials:
-  - **username:** `admin`
-  - **password:** `admin123`
-- Override in production via env vars `PCOS_ADMIN_USER` / `PCOS_ADMIN_PASS`.
-- The dashboard shows accuracy / precision / recall / F1 / ROC-AUC, the
-  confusion matrix, feature importances, and live usage statistics.
+All roles share the same **/login** form (email + password):
+
+| Role          | Demo email                     | Password       |
+| ------------- | ------------------------------- | -------------- |
+| Patient       | *(register your own at /register)* | —           |
+| Doctor        | `doctor@pcos.ai`                | `doctor123`    |
+| Counselor     | `ananya.counselor@pcos.ai` (+ `priya.counselor@pcos.ai`, `fatima.counselor@pcos.ai`) | `counselor123` |
+| Admin         | `admin@pcos.ai`                 | `admin123`     |
+
+Override via env vars: `PCOS_ADMIN_EMAIL`/`PCOS_ADMIN_PASS`,
+`PCOS_DOCTOR_EMAIL`/`PCOS_DOCTOR_PASS`, `PCOS_COUNSELOR_PASS` (applies to all
+three seeded counselors).
+
+- **Patients** pick a doctor or counselor as their care provider (from their
+  dashboard, or right from a High-risk result) — they default to the doctor
+  until they choose someone else.
+- **Counselors** see and can upload prescriptions only for patients who
+  selected them.
+- **Doctors** have the same unrestricted reach as admins: every patient's
+  assessments, and the ability to upload a prescription for anyone —
+  regardless of who that patient selected, and regardless of the doctor's own
+  availability status. A doctor's prescription also supersedes (but doesn't
+  delete) a counselor's earlier one for that patient.
+- **Doctors/counselors** can toggle an availability switch so patients know
+  who's currently reachable when choosing a provider.
+- **Admin** (**/admin**) additionally sees model metrics: accuracy /
+  precision / recall / F1 / ROC-AUC, the confusion matrix, feature
+  importances, and live usage statistics across every patient.
 
 ---
 
 ## API
 
-| Method | Endpoint              | Description                          |
-| ------ | --------------------- | ------------------------------------ |
-| GET    | `/api/health`         | Service health                       |
-| POST   | `/api/predict`        | Run a risk assessment                |
-| POST   | `/api/admin/login`    | Get a demo admin token               |
-| GET    | `/api/admin/metrics`  | Model evaluation metrics (auth)      |
-| GET    | `/api/admin/stats`    | Aggregate prediction stats (auth)    |
-| POST   | `/api/admin/retrain`  | Retrain the model (auth)             |
+| Method | Endpoint                        | Description                                         |
+| ------ | -------------------------------- | ---------------------------------------------------- |
+| GET    | `/api/health`                    | Service health                                       |
+| POST   | `/api/predict`                   | Run a risk assessment (optionally authenticated)     |
+| POST   | `/api/auth/register`             | Patient self-registration                            |
+| POST   | `/api/auth/login`                | Login for any role                                   |
+| POST   | `/api/auth/forgot-password`      | Request a password reset link                        |
+| POST   | `/api/auth/reset-password`       | Set a new password using a reset token               |
+| GET    | `/api/auth/me`                   | Current user (auth)                                  |
+| GET    | `/api/providers`                 | List doctors & counselors with availability          |
+| PATCH  | `/api/provider/availability`     | Toggle own availability (doctor/counselor)           |
+| POST   | `/api/patient/select-provider`   | Choose/clear preferred provider (patient)            |
+| GET    | `/api/patient/history`           | The patient's own assessments (patient)              |
+| GET    | `/api/doctor/assessments`        | Every assessment (doctor/admin); selected patients only (counselor) |
+| POST   | `/api/doctor/prescriptions`      | Upload for any patient (doctor/admin); selected patients only (counselor) |
+| GET    | `/api/admin/metrics`             | Model evaluation metrics (admin)                     |
+| GET    | `/api/admin/stats`               | Aggregate prediction stats (admin)                   |
+| POST   | `/api/admin/retrain`             | Retrain the model (admin)                            |
 
 Interactive docs: **http://127.0.0.1:8000/docs**
 
@@ -146,28 +244,34 @@ built React frontend, so there's one URL and no CORS to configure.
    is then live at `https://<name>.onrender.com`.
 
 > Free-plan caveats: the service **spins down after ~15 min idle** (first
-> request then cold-starts in ~30–50 s), and the filesystem is **ephemeral** —
-> the SQLite DB and uploaded prescriptions reset on each deploy/restart.
+> request then cold-starts in ~30–50 s). The filesystem is also **ephemeral**,
+> so uploaded prescriptions reset on each deploy/restart. Predictions and user
+> accounts live in MySQL (see below) and aren't affected by this — but Render
+> doesn't bundle MySQL, so you'll need `DB_HOST`/`DB_USER`/`DB_PASSWORD`/
+> `DB_NAME` pointed at an external MySQL instance (e.g. PlanetScale, Railway,
+> or any managed MySQL) rather than XAMPP, which is for local development only.
 
 ### Option B — Run the production image locally (Docker)
 
+Use `docker compose` (see [Quick start](#quick-start--docker-compose-recommended)
+above) — it builds this same image and also starts the MySQL container the
+app needs:
+
 ```bash
-docker build -t pcos-care-ai .
-docker run -p 8000:8000 -e PORT=8000 pcos-care-ai
+docker compose up --build
 # open http://localhost:8000
 ```
 
-### Making data persist (still free)
+### Making uploads persist (still free)
 
-For real persistence instead of ephemeral SQLite/disk:
+The database already persists outside the app's filesystem (MySQL), so the
+remaining ephemeral piece on free hosting is uploaded prescription files:
 
-- **Database** → managed Postgres on [Neon](https://neon.tech) or
-  [Supabase](https://supabase.com) (swap the `sqlite3` calls in `app/db.py`).
 - **Uploaded files** → Supabase Storage or Cloudflare R2 (replace local disk
   writes in the prescription upload/download endpoints).
 - **Sessions** → JWTs instead of the in-memory token store in `app/auth.py`.
 - Host the backend on **Fly.io** with a small persistent volume if you'd rather
-  keep SQLite + local files.
+  keep local files for uploads.
 
 ### Split deployment (frontend and backend separate)
 

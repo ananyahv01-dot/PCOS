@@ -20,10 +20,10 @@ const YES_NO_FIELDS = [
 
 const initialState = {
   name: "",
-  age: 25,
-  weight_kg: 60,
-  height_cm: 160,
-  cycle_length: 30,
+  age: "",
+  weight_kg: "",
+  height_cm: "",
+  cycle_length: "",
   cycle_irregular: false,
   weight_gain: false,
   hair_growth: false,
@@ -73,9 +73,9 @@ export default function Assessment() {
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
   const bmi = (() => {
-    const h = form.height_cm / 100;
-    if (!h) return 0;
-    return (form.weight_kg / (h * h)).toFixed(1);
+    const h = Number(form.height_cm) / 100;
+    if (!h || !form.weight_kg) return "—";
+    return (Number(form.weight_kg) / (h * h)).toFixed(1);
   })();
 
   const onSubmit = async (e) => {
@@ -134,6 +134,7 @@ export default function Assessment() {
                 max="70"
                 required
                 className="input"
+                placeholder="e.g. 28"
                 value={form.age}
                 onChange={(e) => set("age", e.target.value)}
               />
@@ -146,6 +147,7 @@ export default function Assessment() {
                 max="90"
                 required
                 className="input"
+                placeholder="e.g. 30"
                 value={form.cycle_length}
                 onChange={(e) => set("cycle_length", e.target.value)}
               />
@@ -159,6 +161,7 @@ export default function Assessment() {
                 step="0.1"
                 required
                 className="input"
+                placeholder="e.g. 65"
                 value={form.weight_kg}
                 onChange={(e) => set("weight_kg", e.target.value)}
               />
@@ -172,6 +175,7 @@ export default function Assessment() {
                 step="0.1"
                 required
                 className="input"
+                placeholder="e.g. 160"
                 value={form.height_cm}
                 onChange={(e) => set("height_cm", e.target.value)}
               />

@@ -29,9 +29,28 @@ export const register = (name, email, password) =>
 export const login = (email, password) =>
   api.post("/api/auth/login", { email, password }).then((r) => r.data);
 
+export const forgotPassword = (email) =>
+  api.post("/api/auth/forgot-password", { email }).then((r) => r.data);
+
+export const resetPassword = (token, newPassword) =>
+  api
+    .post("/api/auth/reset-password", { token, new_password: newPassword })
+    .then((r) => r.data);
+
 // ---- Assessment ----------------------------------------------------------
 export const predict = (payload) =>
   api.post("/api/predict", payload).then((r) => r.data);
+
+// ---- Providers (doctors & counselors) -------------------------------------
+export const getProviders = () => api.get("/api/providers").then((r) => r.data);
+
+export const setAvailability = (available) =>
+  api.patch("/api/provider/availability", { available }).then((r) => r.data);
+
+export const selectProvider = (providerId) =>
+  api
+    .post("/api/patient/select-provider", { provider_id: providerId })
+    .then((r) => r.data);
 
 // ---- Patient -------------------------------------------------------------
 export const getHistory = () =>
@@ -72,6 +91,41 @@ export const downloadPrescription = async (id, filename) => {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename || `prescription-${id}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
+// ---- Blood reports (patient uploads, for High-risk assessments only) -----
+export const uploadBloodReport = ({ note, assessmentId, file }) => {
+  const form = new FormData();
+  if (note) form.append("note", note);
+  if (assessmentId != null) form.append("assessment_id", assessmentId);
+  form.append("file", file);
+  return api
+    .post("/api/patient/blood-reports", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data);
+};
+
+export const getPatientBloodReports = () =>
+  api.get("/api/patient/blood-reports").then((r) => r.data);
+
+export const getProviderBloodReports = (patientEmail) =>
+  api
+    .get("/api/doctor/blood-reports", { params: { patient_email: patientEmail } })
+    .then((r) => r.data);
+
+export const downloadBloodReport = async (id, filename) => {
+  const res = await api.get(`/api/blood-reports/${id}/download`, {
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || `blood-report-${id}`;
   document.body.appendChild(a);
   a.click();
   a.remove();

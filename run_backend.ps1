@@ -1,5 +1,6 @@
 # PCOS Care AI - backend launcher (Windows PowerShell)
 # Creates a virtualenv, installs deps, and starts the FastAPI server.
+# Requires MySQL running first (e.g. start MySQL in the XAMPP Control Panel).
 $ErrorActionPreference = "Stop"
 Set-Location "$PSScriptRoot\backend"
 

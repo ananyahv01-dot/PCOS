@@ -65,7 +65,7 @@ def generate_dataset(n_samples: int = 2000, seed: int = 42) -> pd.DataFrame:
         + 0.80 * family_history
         + 0.06 * (bmi - 25)
         + 0.02 * (cycle_length - 30)
-        + rng.normal(0, 0.6, size=n_samples)  # irreducible noise
+        + rng.normal(0, 0.2, size=n_samples)  # irreducible noise
     )
 
     # Threshold chosen to give a roughly balanced (~40% positive) dataset.

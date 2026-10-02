@@ -95,13 +95,47 @@ class LoginInput(BaseModel):
     password: str = Field(..., min_length=1, max_length=100)
 
 
+class ForgotPasswordInput(BaseModel):
+    email: str = Field(..., min_length=3, max_length=120)
+
+
+class ResetPasswordInput(BaseModel):
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6, max_length=100)
+
+
 class UserOut(BaseModel):
     id: int
     name: str
     email: str
-    role: Literal["patient", "doctor", "admin"]
+    role: Literal["patient", "doctor", "counselor", "admin"]
+    specialty: str | None = None
+    phone: str | None = None
+    available: bool | None = None
+    preferred_provider_id: int | None = None
 
 
 class AuthResponse(BaseModel):
     token: str
     user: UserOut
+
+
+# ---- Providers (doctor / counselor) & patient selection -------------------- #
+class ProviderOut(BaseModel):
+    id: int
+    name: str
+    role: Literal["doctor", "counselor"]
+    email: str
+    specialty: str | None = None
+    phone: str | None = None
+    available: bool
+
+
+class AvailabilityInput(BaseModel):
+    available: bool
+
+
+class SelectProviderInput(BaseModel):
+    provider_id: int | None = Field(
+        default=None, description="Provider to select, or null to clear the selection"
+    )

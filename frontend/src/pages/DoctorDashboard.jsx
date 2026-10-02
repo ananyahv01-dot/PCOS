@@ -1,12 +1,63 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileDown, FileUp, Loader2, Stethoscope, X } from "lucide-react";
 import {
+  FileDown,
+  FileText,
+  FileUp,
+  FlaskConical,
+  Loader2,
+  Stethoscope,
+  X,
+} from "lucide-react";
+import {
+  downloadBloodReport,
   getAssessment,
   getDoctorAssessments,
+  getProviderBloodReports,
+  setAvailability,
   uploadPrescription,
 } from "../api.js";
 import { downloadReport } from "../report.js";
 import { useAuth } from "../auth.jsx";
+
+const ROLE_LABEL = { doctor: "Doctor", counselor: "Counselor", admin: "Admin" };
+
+// Switch only the doctor sets, so patients know whether to pick them.
+// Counselors have no availability concept — they're always the fallback.
+function AvailabilityToggle({ user, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const available = !!user?.available;
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      await setAvailability(!available);
+      onChange(!available);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={busy}
+      className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+        available
+          ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+          : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+      }`}
+    >
+      {busy ? (
+        <Loader2 size={14} className="animate-spin" />
+      ) : (
+        <span
+          className={`h-2 w-2 rounded-full ${available ? "bg-emerald-500" : "bg-slate-400"}`}
+        />
+      )}
+      {available ? "Available to patients" : "Unavailable"}
+    </button>
+  );
+}
 
 const RISK_COLORS = { Low: "#16a34a", Moderate: "#d97706", High: "#dc2626" };
 
@@ -104,13 +155,105 @@ function UploadModal({ row, onClose, onUploaded }) {
   );
 }
 
+// Modal listing a patient's uploaded blood/lab reports, for the provider to
+// review before prescribing.
+function BloodReportsModal({ row, onClose }) {
+  const [reports, setReports] = useState(null);
+  const [error, setError] = useState("");
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  useEffect(() => {
+    getProviderBloodReports(row.user_email)
+      .then((r) => setReports(r.blood_reports))
+      .catch((err) =>
+        setError(err?.response?.data?.detail?.toString() || "Could not load reports.")
+      );
+  }, [row.user_email]);
+
+  const onDownload = async (br) => {
+    setDownloadingId(br.id);
+    try {
+      await downloadBloodReport(br.id, br.filename);
+    } catch {
+      setError("Could not download that report.");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4">
+      <div className="card w-full max-w-md">
+        <div className="flex items-start justify-between">
+          <h3 className="font-bold text-slate-800">Blood / lab reports</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X size={20} />
+          </button>
+        </div>
+        <p className="mt-1 text-sm text-slate-500">
+          For <span className="font-medium">{row.name || "patient"}</span> ·{" "}
+          {row.user_email}
+        </p>
+
+        {error && (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {!reports && !error ? (
+          <div className="grid place-items-center py-8 text-slate-400">
+            <Loader2 className="animate-spin" size={24} />
+          </div>
+        ) : reports?.length === 0 ? (
+          <p className="py-8 text-center text-sm text-slate-500">
+            No blood reports have been uploaded yet.
+          </p>
+        ) : (
+          <ul className="mt-4 divide-y divide-slate-100">
+            {reports?.map((br) => (
+              <li key={br.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500">
+                    <FlaskConical size={18} />
+                  </span>
+                  <div>
+                    <p className="font-medium text-slate-800">{br.filename}</p>
+                    <p className="text-xs text-slate-500">
+                      {new Date(br.created_at).toLocaleString()}
+                    </p>
+                    {br.note && <p className="mt-1 text-sm text-slate-600">{br.note}</p>}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onDownload(br)}
+                  disabled={downloadingId === br.id}
+                  className="btn-ghost text-sm"
+                >
+                  {downloadingId === br.id ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <FileText size={16} />
+                  )}
+                  Download
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DoctorDashboard() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("All");
   const [uploadRow, setUploadRow] = useState(null);
+  const [labsRow, setLabsRow] = useState(null);
   const [busyReport, setBusyReport] = useState(null);
   const [toast, setToast] = useState("");
 
@@ -165,16 +308,29 @@ export default function DoctorDashboard() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
-      <div className="flex items-center gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-600">
-          <Stethoscope size={22} />
-        </span>
-        <div>
-          <h1 className="text-3xl font-extrabold text-slate-900">Doctor dashboard</h1>
-          <p className="text-sm text-slate-500">
-            {user?.name} · Patient assessment review
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-600">
+            <Stethoscope size={22} />
+          </span>
+          <div>
+            <h1 className="text-3xl font-extrabold text-slate-900">
+              {ROLE_LABEL[user?.role] || "Provider"} dashboard
+            </h1>
+            <p className="text-sm text-slate-500">
+              {user?.name} ·{" "}
+              {user?.role === "counselor"
+                ? "Assessments of patients who selected you"
+                : "All patient assessments"}
+            </p>
+          </div>
         </div>
+        {user?.role === "doctor" && (
+          <AvailabilityToggle
+            user={user}
+            onChange={(available) => updateUser({ available })}
+          />
+        )}
       </div>
 
       {error && (
@@ -231,7 +387,9 @@ export default function DoctorDashboard() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan="8" className="py-8 text-center text-slate-400">
-                    No assessments for this filter.
+                    {data?.total === 0 && user?.role === "counselor"
+                      ? "No patients have selected you yet."
+                      : "No assessments for this filter."}
                   </td>
                 </tr>
               )}
@@ -270,15 +428,37 @@ export default function DoctorDashboard() {
                       </button>
                       <button
                         onClick={() => setUploadRow(a)}
-                        disabled={!a.user_email}
+                        disabled={
+                          !a.user_email ||
+                          (user?.role === "counselor" && a.risk_level !== "High")
+                        }
                         title={
-                          a.user_email
-                            ? "Upload prescription"
-                            : "Guest assessment — no patient account to attach to"
+                          !a.user_email
+                            ? "Guest assessment — no patient account to attach to"
+                            : user?.role === "counselor" && a.risk_level !== "High"
+                            ? "Counselors can only upload prescriptions for High-risk patients"
+                            : "Upload prescription"
                         }
                         className="inline-flex items-center gap-1 rounded-lg border border-brand-200 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <FileUp size={13} /> Rx
+                      </button>
+                      <button
+                        onClick={() => setLabsRow(a)}
+                        disabled={
+                          !a.user_email ||
+                          (user?.role === "counselor" && a.risk_level !== "High")
+                        }
+                        title={
+                          !a.user_email
+                            ? "Guest assessment — no patient account to attach to"
+                            : user?.role === "counselor" && a.risk_level !== "High"
+                            ? "Counselors can only view blood reports for High-risk patients"
+                            : "View blood reports"
+                        }
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <FlaskConical size={13} /> Labs
                       </button>
                     </div>
                   </td>
@@ -295,6 +475,10 @@ export default function DoctorDashboard() {
           onClose={() => setUploadRow(null)}
           onUploaded={onUploaded}
         />
+      )}
+
+      {labsRow && (
+        <BloodReportsModal row={labsRow} onClose={() => setLabsRow(null)} />
       )}
     </div>
   );

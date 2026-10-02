@@ -4,7 +4,12 @@ import { Loader2, LogIn } from "lucide-react";
 import { login as apiLogin } from "../api.js";
 import { useAuth } from "../auth.jsx";
 
-const roleHome = { patient: "/patient", doctor: "/doctor", admin: "/admin" };
+const roleHome = {
+  patient: "/patient",
+  doctor: "/doctor",
+  counselor: "/doctor",
+  admin: "/admin",
+};
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -55,7 +60,12 @@ export default function Login() {
             />
           </div>
           <div>
-            <label className="label">Password</label>
+            <div className="flex items-center justify-between">
+              <label className="label">Password</label>
+              <Link to="/forgot-password" className="text-sm font-semibold text-brand-700">
+                Forgot password?
+              </Link>
+            </div>
             <input
               type="password"
               className="input"
@@ -86,6 +96,7 @@ export default function Login() {
         <div className="mt-5 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
           <p className="font-semibold text-slate-600">Demo accounts</p>
           <p>Doctor — doctor@pcos.ai / doctor123</p>
+          <p>Counselor — ananya.counselor@pcos.ai / counselor123</p>
           <p>Admin — admin@pcos.ai / admin123</p>
         </div>
       </div>

@@ -4,12 +4,14 @@
 # Deploy:
 #   1. Push this repo to GitHub.
 #   2. On https://render.com → New → Blueprint → pick this repo.
-#   3. Set the two secret env vars when prompted, then Apply.
+#   3. Set the secret env vars when prompted, then Apply.
 #   4. First build takes a few minutes (installs deps + trains the model).
 #
-# Note: the free plan has an ephemeral filesystem, so the SQLite database and
-# uploaded prescriptions reset on each deploy/restart. For persistence, attach
-# a managed Postgres (Neon/Supabase) and object storage (see README).
+# Note: predictions/users live in MySQL, not local disk, but Render doesn't
+# bundle MySQL — point DB_HOST/DB_USER/DB_PASSWORD/DB_NAME at an external
+# MySQL instance (e.g. PlanetScale, Railway). The free plan's ephemeral
+# filesystem still resets uploaded prescriptions on each deploy/restart; for
+# persisting those too, see README (object storage options).
 services:
   - type: web
     name: pcos-care-ai
@@ -24,3 +26,13 @@ services:
         sync: false          # set your own doctor password in the dashboard
       - key: ALLOWED_ORIGINS
         value: "*"
+      - key: DB_HOST
+        sync: false          # external MySQL host (XAMPP is local-dev only)
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: "pcos_care"

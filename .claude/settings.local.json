@@ -5,7 +5,32 @@
       "PowerShell(pip --version)",
       "PowerShell(node --version)",
       "PowerShell(npm --version)",
-      "PowerShell(try { & python3 --version } catch { \"python3 stub not functional: $_\" })"
+      "PowerShell(try { & python3 --version } catch { \"python3 stub not functional: $_\" })",
+      "Bash(npm -v)",
+      "Bash(python -c \"import graphviz\")",
+      "Bash(where dot *)",
+      "Bash(where mmdc *)",
+      "Bash(pip show *)",
+      "Bash(npm ping *)",
+      "Bash(npx --yes @mermaid-js/mermaid-cli -V)",
+      "Bash(npm config *)",
+      "Bash(npx --yes --registry=https://registry.npmjs.org @mermaid-js/mermaid-cli -V)",
+      "Bash(python -c ' *)",
+      "Read(//c/Users/snarasimhamurthy/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/6a880e20-3e9f-4df9-8759-045b3e7b91fc/8c95b07f-9665-437c-90a2-1872d7aed807/skills/docx/**)",
+      "Bash(node -e \"console.log\\(require.resolve\\('docx'\\)\\)\")",
+      "Bash(npm root *)",
+      "Bash(node -e \"console.log\\(process.env.NODE_PATH\\)\")",
+      "Read(//c/Users/snarasimhamurthy/AppData/Roaming/**)",
+      "Bash(node -e \"require\\('docx'\\)\" --experimental-vm-modules)",
+      "Bash(whoami *)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"CommandLine LIKE '%http.server 8899%'\" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; \"done\")",
+      "Bash(python -c \"import pptx; print\\('python-pptx', pptx.__version__\\)\")",
+      "Bash(python -c \"import PIL; print\\('PIL ok'\\)\")",
+      "Bash(node -e \"console.log\\(require.resolve\\('pptxgenjs'\\)\\)\")",
+      "Bash(python -)",
+      "Bash(pip config *)",
+      "Bash(pip install *)",
+      "Bash(powershell -NoProfile -Command ' *)"
     ]
   }
 }

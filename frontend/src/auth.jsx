@@ -33,6 +33,17 @@ export function AuthProvider({ children }) {
     setAuth(null);
   };
 
+  // Patch fields (e.g. availability, preferred_provider_id) into the cached
+  // user after an update, so the UI reflects it without a re-login.
+  const updateUser = (patch) => {
+    setAuth((prev) => {
+      if (!prev) return prev;
+      const value = { ...prev, user: { ...prev.user, ...patch } };
+      sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(value));
+      return value;
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -42,6 +53,7 @@ export function AuthProvider({ children }) {
         isAuthed: !!auth?.token,
         login,
         logout,
+        updateUser,
       }}
     >
       {children}

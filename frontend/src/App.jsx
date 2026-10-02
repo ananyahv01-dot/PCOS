@@ -7,6 +7,8 @@ import Assessment from "./pages/Assessment.jsx";
 import Result from "./pages/Result.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
 import PatientDashboard from "./pages/PatientDashboard.jsx";
 import DoctorDashboard from "./pages/DoctorDashboard.jsx";
 import AdminDashboard from "./pages/AdminDashboard.jsx";
@@ -22,6 +24,8 @@ export default function App() {
           <Route path="/result" element={<Result />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           <Route
             path="/patient"
@@ -34,7 +38,7 @@ export default function App() {
           <Route
             path="/doctor"
             element={
-              <ProtectedRoute roles={["doctor", "admin"]}>
+              <ProtectedRoute roles={["doctor", "counselor", "admin"]}>
                 <DoctorDashboard />
               </ProtectedRoute>
             }
