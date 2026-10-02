@@ -76,10 +76,10 @@ This starts three containers:
   non-local use).
 - **app** — the existing single-service image (see [Dockerfile](Dockerfile)),
   pointed at the `mysql` container via `DB_HOST=mysql`.
-- **adminer** — a browser-based MySQL admin UI (the XAMPP phpMyAdmin
-  equivalent) at [http://localhost:8080](http://localhost:8080). Log in with
-  System `MySQL`, Server `mysql`, and the same user/password/database as the
-  `app` service's `DB_*` env vars in `docker-compose.yml`.
+- **phpmyadmin** — the actual phpMyAdmin XAMPP ships with, for browsing the
+  MySQL database, at [http://localhost:8080](http://localhost:8080). Log in
+  with Server `mysql` and the same user/password as the `app` service's
+  `DB_*` env vars in `docker-compose.yml`.
 
 Override the demo admin/doctor passwords by exporting `PCOS_ADMIN_PASS` /
 `PCOS_DOCTOR_PASS` before running `docker compose up`, or editing

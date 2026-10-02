@@ -36,17 +36,19 @@ services:
     ports:
       - "8000:8000"
 
-  # Browser-based MySQL admin UI (the phpMyAdmin-equivalent XAMPP ships with).
-  adminer:
-    image: adminer:latest
+  # The actual phpMyAdmin XAMPP ships with, for browsing the MySQL database.
+  phpmyadmin:
+    image: phpmyadmin:latest
     restart: unless-stopped
     depends_on:
       mysql:
         condition: service_healthy
     environment:
-      ADMINER_DEFAULT_SERVER: mysql
+      PMA_HOST: mysql
+      PMA_PORT: "3306"
+      UPLOAD_LIMIT: 50M
     ports:
-      - "8080:8080"
+      - "8080:80"
 
 volumes:
   mysql_data:
