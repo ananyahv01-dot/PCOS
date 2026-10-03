@@ -1,42 +1,93 @@
 """
-Synthetic PCOS dataset generator.
+PCOS training dataset.
 
-A real deployment should replace this with a validated clinical dataset
-(e.g. the public Kaggle "PCOS" dataset). Because no such file ships with
-this project, we generate a realistic, internally-consistent synthetic
-dataset so the full ML pipeline (training -> evaluation -> prediction)
-runs end to end and the admin dashboard has meaningful numbers to show.
+Primary source: the real clinical dataset from Kaggle - "Polycystic ovary
+syndrome (PCOS)" by prasoonkottarathil (`PCOS_data_without_infertility.xlsx`,
+backend/data/). 541 patients collected across 10 hospitals in Kerala, India.
 
-The generator builds correlated features and derives the label from a
-latent risk score plus random noise, so the pattern is learnable but not
-trivially perfect. The reported accuracy therefore reflects a genuine
-train/test split rather than a hard-coded figure.
+Two of the app's existing inputs (mood_swings, family_history) aren't
+recorded in that dataset. Rather than fabricate a relationship for them,
+they're included as constant/zero columns here — the model learns no real
+signal from them, but the assessment form still asks for them since
+`recommendations.py`'s rule-based advice still uses the raw answers.
+
+If the data file isn't present (e.g. a checkout without it), this falls
+back to a fabricated synthetic dataset so the pipeline still runs end to
+end — see `_generate_synthetic_dataset` below.
 """
 
 from __future__ import annotations
+
+import os
 
 import numpy as np
 import pandas as pd
 
 from .features import FEATURE_ORDER
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATASET_PATH = os.path.join(BASE_DIR, "data", "PCOS_data_without_infertility.xlsx")
 
-def generate_dataset(n_samples: int = 2000, seed: int = 42) -> pd.DataFrame:
+# Not recorded in the real dataset — see module docstring.
+_FEATURES_NOT_IN_REAL_DATA = ("mood_swings", "family_history")
+
+_REAL_COLUMN_MAP = {
+    "age": "Age (yrs)",
+    "bmi": "BMI",
+    "cycle_length": "Cycle length(days)",
+    "cycle_irregular": "Cycle(R/I)",  # 2 = regular, 4/5 = irregular
+    "weight_gain": "Weight gain(Y/N)",
+    "hair_growth": "hair growth(Y/N)",
+    "skin_darkening": "Skin darkening (Y/N)",
+    "hair_loss": "Hair loss(Y/N)",
+    "pimples": "Pimples(Y/N)",
+    "fast_food": "Fast food (Y/N)",
+    "exercise": "Reg.Exercise(Y/N)",
+}
+
+
+def _load_real_dataset() -> pd.DataFrame:
+    raw = pd.read_excel(DATASET_PATH, sheet_name="Full_new")
+    raw = raw.drop(columns=[c for c in raw.columns if c.startswith("Unnamed")])
+    raw.columns = [c.strip() for c in raw.columns]
+
+    # A couple of known data-entry typos in this real-world dataset
+    # (e.g. "1.99.", "a") -> coerce to numeric, fill with the column median
+    # rather than drop the row.
+    for col in raw.columns:
+        if raw[col].dtype == object:
+            raw[col] = pd.to_numeric(raw[col], errors="coerce")
+    raw = raw.fillna(raw.median(numeric_only=True))
+
+    df = pd.DataFrame()
+    for feature, source_col in _REAL_COLUMN_MAP.items():
+        if feature == "cycle_irregular":
+            df[feature] = (raw[source_col] != 2).astype(int)
+        else:
+            df[feature] = raw[source_col]
+    for feature in _FEATURES_NOT_IN_REAL_DATA:
+        df[feature] = 0
+    df["pcos"] = raw["PCOS (Y/N)"].astype(int)
+
+    return df[FEATURE_ORDER + ["pcos"]]
+
+
+def _generate_synthetic_dataset(n_samples: int = 2000, seed: int = 42) -> pd.DataFrame:
+    """Fabricated fallback dataset, used only if the real data file (see
+    DATASET_PATH) isn't present. Builds correlated features and derives the
+    label from a latent risk score plus random noise, so the pattern is
+    learnable but not trivially perfect."""
     rng = np.random.default_rng(seed)
 
-    # --- Base demographics ---------------------------------------------
     age = rng.integers(18, 45, size=n_samples)
     height_cm = rng.normal(160, 7, size=n_samples).clip(140, 185)
     weight_kg = rng.normal(64, 14, size=n_samples).clip(40, 120)
     bmi = (weight_kg / ((height_cm / 100) ** 2)).round(2)
 
-    # --- Menstrual features --------------------------------------------
     cycle_length = rng.normal(30, 6, size=n_samples).clip(21, 55).round().astype(int)
-    # Irregularity is more likely with longer cycles and higher BMI.
     irregular_p = 0.15 + 0.010 * (cycle_length - 28) + 0.010 * (bmi - 24)
     cycle_irregular = (rng.random(n_samples) < irregular_p.clip(0.05, 0.9)).astype(int)
 
-    # --- Symptom / lifestyle features (correlated with BMI) ------------
     def bernoulli(base, bmi_coef=0.0):
         p = (base + bmi_coef * (bmi - 24)).clip(0.03, 0.95)
         return (rng.random(n_samples) < p).astype(int)
@@ -47,11 +98,10 @@ def generate_dataset(n_samples: int = 2000, seed: int = 42) -> pd.DataFrame:
     hair_loss = bernoulli(0.25, 0.008)
     pimples = bernoulli(0.35, 0.006)
     fast_food = bernoulli(0.40, 0.010)
-    exercise = bernoulli(0.45, -0.012)  # heavier -> less likely to exercise
+    exercise = bernoulli(0.45, -0.012)
     mood_swings = bernoulli(0.35, 0.004)
     family_history = bernoulli(0.20)
 
-    # --- Latent risk score ---------------------------------------------
     score = (
         0.90 * cycle_irregular
         + 0.60 * weight_gain
@@ -65,10 +115,9 @@ def generate_dataset(n_samples: int = 2000, seed: int = 42) -> pd.DataFrame:
         + 0.80 * family_history
         + 0.06 * (bmi - 25)
         + 0.02 * (cycle_length - 30)
-        + rng.normal(0, 0.2, size=n_samples)  # irreducible noise
+        + rng.normal(0, 0.2, size=n_samples)
     )
 
-    # Threshold chosen to give a roughly balanced (~40% positive) dataset.
     threshold = np.quantile(score, 0.60)
     pcos = (score > threshold).astype(int)
 
@@ -90,8 +139,16 @@ def generate_dataset(n_samples: int = 2000, seed: int = 42) -> pd.DataFrame:
             "pcos": pcos,
         }
     )
-    # Guarantee column ordering matches the model contract.
     return df[FEATURE_ORDER + ["pcos"]]
+
+
+def generate_dataset(n_samples: int = 2000, seed: int = 42) -> pd.DataFrame:
+    """Returns the training DataFrame: the real dataset if available,
+    otherwise a fabricated fallback. `n_samples`/`seed` only apply to the
+    fallback — the real dataset's size is fixed (541 patients)."""
+    if os.path.exists(DATASET_PATH):
+        return _load_real_dataset()
+    return _generate_synthetic_dataset(n_samples=n_samples, seed=seed)
 
 
 if __name__ == "__main__":
