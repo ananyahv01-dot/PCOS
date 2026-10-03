@@ -22,8 +22,14 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # System deps kept minimal; scikit-learn/numpy ship manylinux wheels.
+# --trusted-host skips cert-chain validation for these specific package
+# hosts only (build-time only, doesn't affect the running app) — needed
+# behind corporate TLS-inspecting proxies whose root CA isn't in this
+# base image's trust store. Harmless no-op on a network without one.
 COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir \
+    --trusted-host pypi.org --trusted-host files.pythonhosted.org \
+    -r requirements.txt
 
 # Backend source
 COPY backend/ ./

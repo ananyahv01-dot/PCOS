@@ -1,9 +1,10 @@
 """
 PCOS training dataset.
 
-Primary source: the real clinical dataset from Kaggle - "Polycystic ovary
-syndrome (PCOS)" by prasoonkottarathil (`PCOS_data_without_infertility.xlsx`,
-backend/data/). 541 patients collected across 10 hospitals in Kerala, India.
+Primary source: the extended PCOS clinical dataset (`PCOS_extended_dataset.csv`,
+backend/data/) — 2,000 patient records following the same schema as the
+original Kaggle "Polycystic ovary syndrome (PCOS)" dataset by
+prasoonkottarathil (541 patients across 10 hospitals in Kerala, India).
 
 Two of the app's existing inputs (mood_swings, family_history) aren't
 recorded in that dataset. Rather than fabricate a relationship for them,
@@ -26,7 +27,7 @@ import pandas as pd
 from .features import FEATURE_ORDER
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATASET_PATH = os.path.join(BASE_DIR, "data", "PCOS_data_without_infertility.xlsx")
+DATASET_PATH = os.path.join(BASE_DIR, "data", "PCOS_extended_dataset.csv")
 
 # Not recorded in the real dataset — see module docstring.
 _FEATURES_NOT_IN_REAL_DATA = ("mood_swings", "family_history")
@@ -47,7 +48,7 @@ _REAL_COLUMN_MAP = {
 
 
 def _load_real_dataset() -> pd.DataFrame:
-    raw = pd.read_excel(DATASET_PATH, sheet_name="Full_new")
+    raw = pd.read_csv(DATASET_PATH)
     raw = raw.drop(columns=[c for c in raw.columns if c.startswith("Unnamed")])
     raw.columns = [c.strip() for c in raw.columns]
 
@@ -145,7 +146,7 @@ def _generate_synthetic_dataset(n_samples: int = 2000, seed: int = 42) -> pd.Dat
 def generate_dataset(n_samples: int = 2000, seed: int = 42) -> pd.DataFrame:
     """Returns the training DataFrame: the real dataset if available,
     otherwise a fabricated fallback. `n_samples`/`seed` only apply to the
-    fallback — the real dataset's size is fixed (541 patients)."""
+    fallback — the real dataset's size is fixed (2,000 patients)."""
     if os.path.exists(DATASET_PATH):
         return _load_real_dataset()
     return _generate_synthetic_dataset(n_samples=n_samples, seed=seed)

@@ -35,13 +35,14 @@ AI/
 │  ├─ app/
 │  │  ├─ main.py            FastAPI app & routes
 │  │  ├─ model_store.py     Train / load / hold the RF model + metrics
-│  │  ├─ data.py            Synthetic dataset generator
+│  │  ├─ data.py            Real (Kaggle) dataset loader + synthetic fallback
 │  │  ├─ features.py        Shared feature contract & BMI helper
 │  │  ├─ recommendations.py Rule-based lifestyle guidance
 │  │  ├─ schemas.py         Pydantic request/response models
 │  │  └─ db.py              MySQL prediction logging
 │  ├─ train.py              Standalone training script
 │  ├─ requirements.txt
+│  ├─ data/                 PCOS dataset (.csv, extends the Kaggle original)
 │  └─ artifacts/            (generated) model + metrics + db
 └─ frontend/
    ├─ src/
@@ -219,13 +220,32 @@ Interactive docs: **http://127.0.0.1:8000/docs**
 
 ## About the dataset & accuracy
 
-This project ships with a **synthetic dataset generator** (`app/data.py`) so the
-full pipeline runs without any external data file. Metrics reported in the
-dashboard come from a genuine 80/20 train/test split on that synthetic data —
-they are **not** hard-coded. To use real data, replace `generate_dataset()` with
-a loader for a validated clinical dataset (e.g. the public Kaggle *PCOS*
-dataset) that returns a DataFrame with the same feature columns, then rerun
-`python train.py`.
+The model trains on `PCOS_extended_dataset.csv` (`backend/data/`) — 2,000
+records extending the original Kaggle *"Polycystic ovary syndrome (PCOS)"*
+dataset by prasoonkottarathil (541 real patients across 10 hospitals in
+Kerala, India). Neither file is fetched automatically (Kaggle requires a
+login to download); see [app/data.py](backend/app/data.py) for the loader.
+
+Two of the app's existing inputs — mood swings and family history — aren't
+recorded in that dataset, so the assessment form still asks for them (the
+rule-based recommendations still use the answers) but the ML model learns
+no signal from them; their feature importance is correctly reported as 0.
+
+> ⚠️ **Accuracy caveat:** the extended 2,000-row file appears to extend the
+> original 541 real patients via synthetic oversampling (~89% of rows have
+> a near-identical neighbor elsewhere in the set). A plain random 80/20
+> split therefore leaks near-duplicate patients across train/test, which is
+> almost certainly why accuracy reads ~98% — that number is inflated, not a
+> trustworthy measure of real-world generalization. The split itself is
+> still genuinely computed (not hard-coded); the input data just isn't
+> free of leakage. For a leakage-free (and more realistic ~85% accuracy)
+> evaluation, train on the original `PCOS_data_without_infertility.xlsx`
+> (541 patients, all genuinely distinct) instead — swap `DATASET_PATH` in
+> `app/data.py`.
+
+If neither data file is present (e.g. a checkout without them),
+`app/data.py` falls back to a fabricated synthetic dataset so the pipeline
+still runs end to end, just without any clinical grounding.
 
 ---
 

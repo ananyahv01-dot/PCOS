@@ -1,7 +1,7 @@
 """
 Demo-only script (not wired into the live app): trains two Random Forest
-variants on the real Kaggle PCOS dataset (backend/data/PCOS_data_without_infertility.xlsx)
-and reports their metrics side by side with the current synthetic-data model.
+variants on the original 541-patient Kaggle PCOS dataset and reports their
+metrics side by side with the live app's model.
 
   Version A - overlapping features: the same 13 inputs app/features.py already
               asks for, but trained on real patient data instead of fabricated
@@ -9,6 +9,10 @@ and reports their metrics side by side with the current synthetic-data model.
               exist in this dataset and are excluded here.
   Version B - full clinical dataset: every usable column (hormone levels,
               follicle counts, blood pressure, etc.), ~38 features.
+
+Requires PCOS_data_without_infertility.xlsx in backend/data/ (not bundled by
+default — the live app currently uses PCOS_extended_dataset.csv instead;
+see app/data.py). Re-download the original file from Kaggle to run this.
 
 Run: backend/.venv/Scripts/python.exe backend/scripts/demo_kaggle_models.py
 """
