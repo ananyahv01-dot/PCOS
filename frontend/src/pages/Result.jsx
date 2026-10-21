@@ -15,6 +15,7 @@ const CATEGORY_STYLES = {
   Monitoring: "bg-violet-50 text-violet-700",
   Wellbeing: "bg-rose-50 text-rose-700",
   "Next step": "bg-brand-50 text-brand-700",
+  Ultrasound: "bg-indigo-50 text-indigo-700",
 };
 
 // Popup urging immediate care, shown for High risk results. Lets the patient
@@ -130,7 +131,15 @@ export default function Result() {
   // If the user navigates here directly without a result, send them back.
   if (!result) return <Navigate to="/assessment" replace />;
 
-  const { risk_level, probability, bmi, recommendations, disclaimer } = result;
+  const {
+    risk_level,
+    probability,
+    clinical_probability,
+    ultrasound,
+    bmi,
+    recommendations,
+    disclaimer,
+  } = result;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
@@ -140,7 +149,14 @@ export default function Result() {
         </h1>
         <button
           className="btn-primary"
-          onClick={() => downloadReport({ result, name, responses })}
+          onClick={() =>
+            downloadReport({
+              result,
+              name,
+              responses,
+              ultrasoundImage: state?.ultrasoundImage,
+            })
+          }
         >
           <Download size={18} /> Download PDF report
         </button>
@@ -158,17 +174,45 @@ export default function Result() {
         <div className="card">
           <h2 className="text-xl font-bold text-slate-800">
             {risk_level === "High" && "Elevated risk indicators"}
-            {risk_level === "Moderate" && "Some risk indicators"}
             {risk_level === "Low" && "Lower risk indicators"}
           </h2>
           <p className="mt-2 text-slate-600">
-            Based on your responses, the model estimates a{" "}
+            Based on your responses{ultrasound && " and ultrasound image"}, the
+            model estimates a{" "}
             <span className="font-semibold">
               {Math.round(probability * 100)}%
             </span>{" "}
             probability associated with PCOS-related patterns. This is a
             preliminary estimate, not a diagnosis.
           </p>
+
+          {ultrasound && (
+            <div className="mt-4 rounded-xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-800">
+                Ultrasound: {ultrasound.finding}
+              </p>
+              <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-slate-500">Symptoms &amp; lifestyle</dt>
+                  <dd className="font-semibold text-slate-800">
+                    {Math.round(clinical_probability * 100)}%
+                    <span className="ml-1 font-normal text-slate-400">
+                      × {Math.round((1 - ultrasound.weight) * 100)}% weight
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Ultrasound image</dt>
+                  <dd className="font-semibold text-slate-800">
+                    {Math.round(ultrasound.probability * 100)}%
+                    <span className="ml-1 font-normal text-slate-400">
+                      × {Math.round(ultrasound.weight * 100)}% weight
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
 
           {risk_level !== "Low" && (
             <div className="mt-4 flex items-start gap-3 rounded-xl bg-brand-50 p-4 text-brand-800">

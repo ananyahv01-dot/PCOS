@@ -1,7 +1,6 @@
 // Simple semicircular gauge showing model probability, coloured by risk tier.
 const TIERS = {
   Low: { color: "#16a34a", label: "Low risk" },
-  Moderate: { color: "#d97706", label: "Moderate risk" },
   High: { color: "#dc2626", label: "High risk" },
 };
 

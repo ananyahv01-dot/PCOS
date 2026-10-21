@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Send } from "lucide-react";
-import { predict } from "../api.js";
+import { ImagePlus, Loader2, Send, X } from "lucide-react";
+import { predict, predictWithUltrasound } from "../api.js";
+import { imageToDataUrl } from "../report.js";
 import Disclaimer from "../components/Disclaimer.jsx";
 import { useAuth } from "../auth.jsx";
 
@@ -63,14 +64,45 @@ function Toggle({ label, value, onChange }) {
   );
 }
 
+const ULTRASOUND_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MAX_ULTRASOUND_BYTES = 10 * 1024 * 1024;
+
 export default function Assessment() {
   const { user } = useAuth();
   const [form, setForm] = useState({ ...initialState, name: user?.name || "" });
+  const [ultrasound, setUltrasound] = useState(null);
+  const [preview, setPreview] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+
+  useEffect(() => {
+    if (!ultrasound) {
+      setPreview("");
+      return undefined;
+    }
+    const url = URL.createObjectURL(ultrasound);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [ultrasound]);
+
+  const onPickUltrasound = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!ULTRASOUND_TYPES.includes(file.type)) {
+      setError("Ultrasound must be a PNG, JPEG or WebP image.");
+      return;
+    }
+    if (file.size > MAX_ULTRASOUND_BYTES) {
+      setError("Ultrasound image exceeds the 10 MB limit.");
+      return;
+    }
+    setError("");
+    setUltrasound(file);
+  };
 
   const bmi = (() => {
     const h = Number(form.height_cm) / 100;
@@ -83,15 +115,24 @@ export default function Assessment() {
     setError("");
     setLoading(true);
     try {
-      const data = await predict({
+      const payload = {
         ...form,
         name: form.name.trim(),
         age: Number(form.age),
         weight_kg: Number(form.weight_kg),
         height_cm: Number(form.height_cm),
         cycle_length: Number(form.cycle_length),
+      };
+      const data = ultrasound
+        ? await predictWithUltrasound(payload, ultrasound)
+        : await predict(payload);
+      // A shrunk copy of the scan travels to the Result page for the report.
+      const ultrasoundImage = ultrasound
+        ? await imageToDataUrl(ultrasound).catch(() => "")
+        : "";
+      navigate("/result", {
+        state: { result: data, form, name: form.name.trim(), ultrasoundImage },
       });
-      navigate("/result", { state: { result: data, form, name: form.name.trim() } });
     } catch (err) {
       setError(
         err?.response?.data?.detail?.toString() ||
@@ -198,6 +239,56 @@ export default function Assessment() {
               />
             ))}
           </div>
+        </div>
+
+        <div className="card">
+          <h2 className="font-semibold text-slate-800">
+            Ovarian ultrasound <span className="font-normal text-slate-500">(optional)</span>
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            If you have a pelvic ultrasound scan, upload the image. It is
+            analysed for polycystic ovarian patterns and combined with your
+            answers above.
+          </p>
+          {ultrasound ? (
+            <div className="mt-4 flex items-start gap-4 rounded-xl border border-slate-200 p-3">
+              <img
+                src={preview}
+                alt="Ultrasound preview"
+                className="h-28 w-28 shrink-0 rounded-lg bg-slate-900 object-contain"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-slate-700">
+                  {ultrasound.name}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {(ultrasound.size / 1024).toFixed(0)} KB
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUltrasound(null)}
+                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Remove ultrasound image"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          ) : (
+            <label className="mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 transition hover:border-brand-400 hover:bg-brand-50/40">
+              <ImagePlus size={28} className="text-brand-500" />
+              <span>
+                <span className="font-semibold text-brand-700">Choose an image</span>{" "}
+                (PNG, JPEG or WebP, up to 10 MB)
+              </span>
+              <input
+                type="file"
+                accept={ULTRASOUND_TYPES.join(",")}
+                className="sr-only"
+                onChange={onPickUltrasound}
+              />
+            </label>
+          )}
         </div>
 
         {error && (

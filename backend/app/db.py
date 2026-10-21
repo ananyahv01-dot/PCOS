@@ -121,6 +121,14 @@ def init_db() -> None:
                 sql_type = "INT" if col == "user_id" else "LONGTEXT"
                 conn.execute(f"ALTER TABLE predictions ADD COLUMN {col} {sql_type}")
 
+        # Risk is now two tiers (Low / High at 50%): fold any assessments
+        # saved under the old Moderate tier into one of them.
+        conn.execute(
+            "UPDATE predictions SET risk_level = "
+            "CASE WHEN probability >= 0.5 THEN 'High' ELSE 'Low' END "
+            "WHERE risk_level = 'Moderate'"
+        )
+
         # Prescriptions uploaded by doctors/counselors for patients.
         conn.execute(
             """
@@ -204,7 +212,7 @@ def get_assessment(assessment_id: int) -> dict | None:
 def get_latest_risk_level(user_id: int) -> str | None:
     """The patient's most recent risk level, or None if they have no
     assessments yet. Used to gate the counselor concept to High-risk
-    patients only — Moderate/Low risk stays doctor-only."""
+    patients only — Low risk stays doctor-only."""
     with closing(_connect()) as conn:
         row = conn.execute(
             "SELECT risk_level FROM predictions WHERE user_id = ? "
@@ -283,7 +291,6 @@ def get_stats() -> dict:
         "total_assessments": total,
         "risk_distribution": {
             "Low": by_level.get("Low", 0),
-            "Moderate": by_level.get("Moderate", 0),
             "High": by_level.get("High", 0),
         },
         "average_probability": avg_prob,

@@ -330,9 +330,13 @@ def create_password_reset_token(email: str) -> str | None:
     return token
 
 
+def reset_path(token: str) -> str:
+    return f"/reset-password?token={token}"
+
+
 def _deliver_reset_link(email: str, token: str) -> None:
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
-    link = f"{frontend_url.rstrip('/')}/reset-password?token={token}"
+    link = f"{frontend_url.rstrip('/')}{reset_path(token)}"
     # No email provider is configured for this demo; print the link instead
     # so it's visible in the server console to whoever is running it locally.
     print(f"[password reset] {email}: {link}", flush=True)

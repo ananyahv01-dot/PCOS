@@ -33,6 +33,12 @@ services:
       PCOS_DOCTOR_PASS: doctor123
       ALLOWED_ORIGINS: "*"
       FRONTEND_URL: "http://localhost:8000"
+      # No email provider locally: show the reset link on the Forgot password
+      # page instead. Keep this off for any public deployment.
+      SHOW_RESET_LINK: "true"
+    volumes:
+      # Uploaded ultrasound scans survive container rebuilds.
+      - ultrasound_uploads:/app/artifacts/ultrasounds
     ports:
       - "8000:8000"
 
@@ -52,3 +58,4 @@ services:
 
 volumes:
   mysql_data:
+  ultrasound_uploads:

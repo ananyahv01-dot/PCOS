@@ -17,7 +17,8 @@ DISCLAIMER = (
 )
 
 
-def build_recommendations(payload: dict, bmi: float, risk_level: str) -> list[dict]:
+def build_recommendations(payload: dict, bmi: float, risk_level: str,
+                          ultrasound: dict | None = None) -> list[dict]:
     recs: list[dict] = []
 
     def add(title, detail, category):
@@ -106,6 +107,25 @@ def build_recommendations(payload: dict, bmi: float, risk_level: str) -> list[di
             "Monitoring",
         )
 
+    # --- Ultrasound ----------------------------------------------------
+    if ultrasound is not None:
+        if ultrasound["probability"] >= 0.5:
+            add(
+                "Have your ultrasound reviewed by a specialist",
+                "The image analysis suggests features consistent with "
+                "polycystic ovaries. A gynaecologist or radiologist should "
+                "confirm this, alongside hormone blood tests.",
+                "Ultrasound",
+            )
+        else:
+            add(
+                "Ultrasound shows no polycystic pattern",
+                "The image analysis did not find a polycystic pattern. PCOS "
+                "can still be present without it, so keep your other symptoms "
+                "in mind when talking to a doctor.",
+                "Ultrasound",
+            )
+
     # --- Risk-tier framing --------------------------------------------
     if risk_level == "High":
         add(
@@ -113,13 +133,6 @@ def build_recommendations(payload: dict, bmi: float, risk_level: str) -> list[di
             "Your responses suggest several factors associated with PCOS. "
             "Please arrange to see a doctor or gynaecologist for proper "
             "evaluation and testing.",
-            "Next step",
-        )
-    elif risk_level == "Moderate":
-        add(
-            "Consider a check-up",
-            "Some of your responses are associated with PCOS. Consider "
-            "discussing them with a healthcare professional at your next visit.",
             "Next step",
         )
     else:

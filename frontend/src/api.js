@@ -41,6 +41,18 @@ export const resetPassword = (token, newPassword) =>
 export const predict = (payload) =>
   api.post("/api/predict", payload).then((r) => r.data);
 
+// Same assessment, with an ultrasound image folded into the risk score.
+export const predictWithUltrasound = (payload, ultrasoundFile) => {
+  const form = new FormData();
+  form.append("payload", JSON.stringify(payload));
+  form.append("ultrasound", ultrasoundFile);
+  return api
+    .post("/api/predict-with-ultrasound", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data);
+};
+
 // ---- Providers (doctors & counselors) -------------------------------------
 export const getProviders = () => api.get("/api/providers").then((r) => r.data);
 
@@ -59,6 +71,11 @@ export const getHistory = () =>
 // ---- Assessment detail (for reports) -------------------------------------
 export const getAssessment = (id) =>
   api.get(`/api/assessments/${id}`).then((r) => r.data);
+
+export const getAssessmentUltrasound = (id) =>
+  api
+    .get(`/api/assessments/${id}/ultrasound`, { responseType: "blob" })
+    .then((r) => r.data);
 
 // ---- Doctor --------------------------------------------------------------
 export const getDoctorAssessments = () =>

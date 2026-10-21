@@ -16,7 +16,7 @@ import { Info, Loader2, LogOut, RefreshCw } from "lucide-react";
 import { getMetrics, getStats, retrain } from "../api.js";
 import { useAuth } from "../auth.jsx";
 
-const RISK_COLORS = { Low: "#16a34a", Moderate: "#d97706", High: "#dc2626" };
+const RISK_COLORS = { Low: "#16a34a", High: "#dc2626" };
 
 // Small info icon that reveals an explanatory tooltip on hover/focus.
 function InfoDot({ text }) {
@@ -261,7 +261,7 @@ export default function AdminDashboard() {
           label="High-risk results"
           value={stats.risk_distribution.High}
           hint="Users advised to consult a doctor"
-          info="Number of assessments classified as High risk (probability at or above 67%)."
+          info="Number of assessments classified as High risk (probability at or above 50%)."
         />
       </div>
 

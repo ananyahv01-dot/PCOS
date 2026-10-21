@@ -53,9 +53,19 @@ class Recommendation(BaseModel):
     category: str
 
 
+class UltrasoundResult(BaseModel):
+    probability: float = Field(..., description="Image-model probability of polycystic morphology (0-1)")
+    finding: str
+    weight: float = Field(..., description="Share of the combined score taken from the ultrasound")
+
+
 class PredictionResponse(BaseModel):
-    risk_level: Literal["Low", "Moderate", "High"]
+    risk_level: Literal["Low", "High"]
     probability: float = Field(..., description="Model probability of PCOS (0-1)")
+    clinical_probability: float | None = Field(
+        default=None, description="Symptom/lifestyle model probability, when an ultrasound was combined in"
+    )
+    ultrasound: UltrasoundResult | None = None
     bmi: float
     recommendations: list[Recommendation]
     disclaimer: str

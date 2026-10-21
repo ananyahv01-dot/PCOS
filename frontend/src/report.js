@@ -6,7 +6,6 @@
 
 const RISK_COLORS = {
   Low: "#16a34a",
-  Moderate: "#d97706",
   High: "#dc2626",
 };
 
@@ -59,7 +58,51 @@ function buildResponses(responses) {
     <div class="resp-grid">${numeric}${boolean}</div>`;
 }
 
-export function downloadReport({ result, name, responses }) {
+// Shrink an uploaded image (File/Blob) to a JPEG data URL small enough to
+// embed in the report and carry in router state.
+export function imageToDataUrl(blob, maxSize = 900) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read the ultrasound image."));
+    };
+    img.src = url;
+  });
+}
+
+// Saved assessments carry the ultrasound result inside their responses; a
+// fresh result carries it at the top level.
+function buildUltrasound(result, responses, ultrasoundImage) {
+  const us = result.ultrasound || responses?.ultrasound;
+  if (!us) return "";
+  const image = ultrasoundImage
+    ? `<div class="us-image"><img src="${escapeHtml(ultrasoundImage)}" alt="Uploaded ultrasound" /><div class="us-caption">Uploaded ultrasound image</div></div>`
+    : "";
+  const clinical = result.clinical_probability ?? responses?.clinical_probability;
+  const weightPct = Math.round(us.weight * 100);
+  return `
+    <h2>Ultrasound analysis</h2>
+    <div class="resp-grid">
+      <div class="resp"><span class="resp-k">Finding</span><span class="resp-v">${escapeHtml(us.finding)}</span></div>
+      <div class="resp"><span class="resp-k">Image model probability</span><span class="resp-v">${Math.round(us.probability * 100)}%</span></div>
+      ${clinical != null ? `<div class="resp"><span class="resp-k">Symptom model probability</span><span class="resp-v">${Math.round(clinical * 100)}%</span></div>` : ""}
+      <div class="resp"><span class="resp-k">Weighting (image / symptoms)</span><span class="resp-v">${weightPct}% / ${100 - weightPct}%</span></div>
+    </div>
+    ${image}`;
+}
+
+export function downloadReport({ result, name, responses, ultrasoundImage }) {
   const { risk_level, probability, bmi, recommendations, disclaimer } = result;
   const pct = Math.round(probability * 100);
   const color = RISK_COLORS[risk_level] || "#334155";
@@ -136,6 +179,14 @@ export function downloadReport({ result, name, responses }) {
   .resp-k { color: #475569; }
   .resp-v { font-weight: 600; color: #1e293b; }
   .resp-v.yes { color: #be185d; }
+  .us-image {
+    margin-top: 12px; text-align: center; page-break-inside: avoid;
+  }
+  .us-image img {
+    max-width: 100%; max-height: 320px; border-radius: 8px;
+    border: 1px solid #e2e8f0; background: #0f172a;
+  }
+  .us-caption { font-size: 11px; color: #64748b; margin-top: 4px; }
   .disclaimer {
     margin-top: 24px; border: 1px solid #fcd34d; background: #fffbeb;
     color: #92400e; font-size: 11px; line-height: 1.5; padding: 12px 14px;
@@ -174,6 +225,8 @@ export function downloadReport({ result, name, responses }) {
       <div class="v">${bmi}</div>
     </div>
   </div>
+
+  ${buildUltrasound(result, responses, ultrasoundImage)}
 
   ${buildResponses(responses)}
 

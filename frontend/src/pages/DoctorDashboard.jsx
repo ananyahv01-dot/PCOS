@@ -11,12 +11,13 @@ import {
 import {
   downloadBloodReport,
   getAssessment,
+  getAssessmentUltrasound,
   getDoctorAssessments,
   getProviderBloodReports,
   setAvailability,
   uploadPrescription,
 } from "../api.js";
-import { downloadReport } from "../report.js";
+import { downloadReport, imageToDataUrl } from "../report.js";
 import { useAuth } from "../auth.jsx";
 
 const ROLE_LABEL = { doctor: "Doctor", counselor: "Counselor", admin: "Admin" };
@@ -59,7 +60,7 @@ function AvailabilityToggle({ user, onChange }) {
   );
 }
 
-const RISK_COLORS = { Low: "#16a34a", Moderate: "#d97706", High: "#dc2626" };
+const RISK_COLORS = { Low: "#16a34a", High: "#dc2626" };
 
 function CountCard({ label, value, color }) {
   return (
@@ -280,10 +281,17 @@ export default function DoctorDashboard() {
     setBusyReport(row.id);
     try {
       const detail = await getAssessment(row.id);
+      // A missing or unreadable scan shouldn't block the rest of the report.
+      const ultrasoundImage = detail.has_ultrasound_image
+        ? await getAssessmentUltrasound(row.id)
+            .then((blob) => imageToDataUrl(blob))
+            .catch(() => "")
+        : "";
       downloadReport({
         result: detail,
         name: detail.name,
         responses: detail.responses,
+        ultrasoundImage,
       });
     } catch {
       setError("Could not generate the report for this assessment.");
@@ -344,10 +352,9 @@ export default function DoctorDashboard() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <CountCard label="Total" value={data?.total || 0} color="#0f172a" />
         <CountCard label="High risk" value={data?.counts.High || 0} color={RISK_COLORS.High} />
-        <CountCard label="Moderate risk" value={data?.counts.Moderate || 0} color={RISK_COLORS.Moderate} />
         <CountCard label="Low risk" value={data?.counts.Low || 0} color={RISK_COLORS.Low} />
       </div>
 
@@ -355,7 +362,7 @@ export default function DoctorDashboard() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold text-slate-800">Assessments</h2>
           <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-            {["All", "High", "Moderate", "Low"].map((f) => (
+            {["All", "High", "Low"].map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}

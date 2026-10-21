@@ -22,7 +22,7 @@ import { useAuth } from "../auth.jsx";
 import ProviderPicker from "../components/ProviderPicker.jsx";
 import CareProviderPicker from "../components/CareProviderPicker.jsx";
 
-const RISK_COLORS = { Low: "#16a34a", Moderate: "#d97706", High: "#dc2626" };
+const RISK_COLORS = { Low: "#16a34a", High: "#dc2626" };
 
 export default function PatientDashboard() {
   const { user, updateUser } = useAuth();
@@ -68,7 +68,7 @@ export default function PatientDashboard() {
     }
   };
 
-  // Counselors only come into play for High-risk patients — Moderate/Low
+  // Counselors only come into play for High-risk patients — Low
   // stays doctor-only, with no counselor concept shown at all.
   const isHighRisk = history[0]?.risk_level === "High";
   const doctorOnly = providers.filter((p) => p.role === "doctor");

@@ -8,14 +8,17 @@ export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
+  const [resetLink, setResetLink] = useState("");
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await forgotPassword(email.trim());
+      const data = await forgotPassword(email.trim());
       // Always show the same confirmation, whether or not the email exists.
+      // The link is only returned when the server runs in demo mode.
+      setResetLink(data?.reset_link || "");
       setSent(true);
     } catch (err) {
       setError(err?.response?.data?.detail?.toString() || "Something went wrong.");
@@ -42,6 +45,14 @@ export default function ForgotPassword() {
             If an account exists for <strong>{email.trim()}</strong>, a reset
             link has been sent. Check your inbox and follow the link to
             choose a new password.
+            {resetLink && (
+              <Link
+                to={resetLink}
+                className="mt-3 inline-block font-semibold text-emerald-800 underline"
+              >
+                Reset password
+              </Link>
+            )}
           </div>
         ) : (
           <form onSubmit={onSubmit} className="mt-6 space-y-4">

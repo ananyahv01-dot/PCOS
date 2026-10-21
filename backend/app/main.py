@@ -6,7 +6,7 @@ Roles
 - patient   : self-registers, takes assessments (defaults to the doctor as
               their provider); offered a counselor instead only if/when the
               doctor is unavailable AND their assessment is High risk —
-              Moderate/Low risk stays doctor-only, no counselor concept at all
+              Low risk stays doctor-only, no counselor concept at all
 - doctor    : unrestricted review/upload like admin, regardless of which
               patients selected them; the only role with an availability
               toggle
@@ -20,6 +20,8 @@ Endpoints
 ---------
 GET  /api/health
 POST /api/predict                  run a risk assessment (optionally authenticated)
+POST /api/predict-with-ultrasound  same, multipart, with an optional ultrasound image
+GET  /api/assessments/{id}/ultrasound  the ultrasound image saved with an assessment
 POST /api/auth/register            patient self-registration
 POST /api/auth/login               login for any role
 POST /api/auth/forgot-password     request a password reset link
@@ -42,6 +44,7 @@ POST /api/admin/retrain            retrain the model                     (admin)
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import uuid
@@ -57,6 +60,8 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from PIL import Image
+from pydantic import ValidationError
 
 from . import auth, db
 from .auth import (
@@ -69,6 +74,7 @@ from .auth import (
 from .features import build_feature_vector
 from .model_store import store, train_and_save
 from .recommendations import DISCLAIMER, build_recommendations
+from .ultrasound import ultrasound_store
 from .schemas import (
     AuthResponse,
     AvailabilityInput,
@@ -105,6 +111,17 @@ ALLOWED_UPLOAD_TYPES = {
     "image/jpg",
     "image/webp",
 }
+ALLOWED_IMAGE_TYPES = ALLOWED_UPLOAD_TYPES - {"application/pdf"}
+IMAGE_EXTENSIONS = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/webp": ".webp",
+}
+ULTRASOUND_DIR = os.path.join(BASE_DIR, "artifacts", "ultrasounds")
+
+# Return password-reset links in the API response (local/demo use only).
+SHOW_RESET_LINK = os.getenv("SHOW_RESET_LINK", "false").lower() == "true"
 
 # Same-origin single-service deploys need no CORS; for split frontend/backend
 # deploys set ALLOWED_ORIGINS to a comma-separated list of frontend URLs.
@@ -123,14 +140,15 @@ def _startup() -> None:
     db.init_db()
     auth.init_auth_db()
     store.load_or_train()
+    ultrasound_store.load()
+
+
+# Two risk tiers only: High at or above this probability, Low below it.
+HIGH_RISK_THRESHOLD = 0.5
 
 
 def _risk_level(probability: float) -> str:
-    if probability < 0.34:
-        return "Low"
-    if probability < 0.67:
-        return "Moderate"
-    return "High"
+    return "High" if probability >= HIGH_RISK_THRESHOLD else "Low"
 
 
 # --------------------------------------------------------------------------- #
@@ -138,7 +156,11 @@ def _risk_level(probability: float) -> str:
 # --------------------------------------------------------------------------- #
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "model_loaded": store.model is not None}
+    return {
+        "status": "ok",
+        "model_loaded": store.model is not None,
+        "ultrasound_model_loaded": ultrasound_store.available,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -188,11 +210,17 @@ def login(payload: LoginInput) -> AuthResponse:
 def forgot_password(payload: ForgotPasswordInput) -> dict:
     # Always return the same generic message, whether or not the email is
     # registered, so this endpoint can't be used to enumerate accounts.
-    auth.create_password_reset_token(payload.email)
-    return {
+    token = auth.create_password_reset_token(payload.email)
+    response = {
         "status": "ok",
         "message": "If an account exists for that email, a reset link has been sent.",
     }
+    # Demo mode: there is no email provider, so hand the link straight back.
+    # This lets anyone reset any account whose email they know — never enable
+    # it on a public deployment.
+    if SHOW_RESET_LINK and token:
+        response["reset_link"] = auth.reset_path(token)
+    return response
 
 
 @app.post("/api/auth/reset-password")
@@ -221,33 +249,103 @@ def me(user: dict = Depends(get_current_user)) -> UserOut:
 # --------------------------------------------------------------------------- #
 from .schemas import AssessmentInput  # noqa: E402  (kept near usage)
 
+# Share of the combined risk score taken from the ultrasound image model when
+# one is supplied; the rest comes from the symptom/lifestyle model. Ovarian
+# morphology is one of the three Rotterdam criteria, so it gets a large but
+# not dominant weight.
+ULTRASOUND_WEIGHT = 0.4
 
-@app.post("/api/predict", response_model=PredictionResponse)
-def predict(payload: AssessmentInput,
-            user: dict | None = Depends(optional_user)) -> PredictionResponse:
-    data = payload.model_dump()
+
+def _run_assessment(data: dict, user: dict | None,
+                    ultrasound_bytes: bytes | None = None,
+                    ultrasound_ext: str = "") -> PredictionResponse:
     feature_vector, bmi = build_feature_vector(data)
-    probability = store.predict_proba(feature_vector)
-    risk_level = _risk_level(probability)
+    clinical_probability = store.predict_proba(feature_vector)
+    probability = clinical_probability
 
-    recommendations = build_recommendations(data, bmi, risk_level)
+    ultrasound = None
+    if ultrasound_bytes is not None:
+        us_probability = ultrasound_store.predict_proba(ultrasound_bytes)
+        probability = ((1 - ULTRASOUND_WEIGHT) * clinical_probability
+                       + ULTRASOUND_WEIGHT * us_probability)
+        ultrasound = {
+            "probability": round(us_probability, 4),
+            "finding": ("Polycystic ovarian morphology suggested"
+                        if us_probability >= 0.5
+                        else "No polycystic ovarian morphology detected"),
+            "weight": ULTRASOUND_WEIGHT,
+        }
+
+    risk_level = _risk_level(probability)
+    recommendations = build_recommendations(data, bmi, risk_level, ultrasound)
+
+    details = dict(data)
+    if ultrasound:
+        details["ultrasound"] = ultrasound
+        details["clinical_probability"] = round(clinical_probability, 4)
+        # Keep the scan so it can go into reports later.
+        os.makedirs(ULTRASOUND_DIR, exist_ok=True)
+        stored_name = f"{uuid.uuid4().hex}{ultrasound_ext}"
+        with open(os.path.join(ULTRASOUND_DIR, stored_name), "wb") as fh:
+            fh.write(ultrasound_bytes)
+        details["ultrasound_image"] = stored_name
 
     db.log_prediction(
         name=data["name"], age=data["age"], bmi=bmi, probability=probability,
         risk_level=risk_level,
         user_id=user["id"] if user else None,
         user_email=user["email"] if user else None,
-        details=json.dumps(data),
+        details=json.dumps(details),
         recommendations=json.dumps(recommendations),
     )
 
     return PredictionResponse(
         risk_level=risk_level,
         probability=round(probability, 4),
+        clinical_probability=round(clinical_probability, 4) if ultrasound else None,
+        ultrasound=ultrasound,
         bmi=bmi,
         recommendations=recommendations,
         disclaimer=DISCLAIMER,
     )
+
+
+@app.post("/api/predict", response_model=PredictionResponse)
+def predict(payload: AssessmentInput,
+            user: dict | None = Depends(optional_user)) -> PredictionResponse:
+    return _run_assessment(payload.model_dump(), user)
+
+
+@app.post("/api/predict-with-ultrasound", response_model=PredictionResponse)
+async def predict_with_ultrasound(
+    payload: str = Form(..., description="AssessmentInput as a JSON string"),
+    ultrasound: UploadFile | None = File(default=None),
+    user: dict | None = Depends(optional_user),
+) -> PredictionResponse:
+    try:
+        data = AssessmentInput.model_validate_json(payload).model_dump()
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors(include_url=False))
+
+    image_bytes = None
+    if ultrasound is not None and ultrasound.filename:
+        if ultrasound.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported ultrasound file. Upload a PNG, JPEG or WebP image.",
+            )
+        image_bytes = await ultrasound.read()
+        if len(image_bytes) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=400, detail="Ultrasound image exceeds the 10 MB limit.")
+        if not ultrasound_store.available:
+            raise HTTPException(status_code=503, detail="Ultrasound model is not available.")
+        try:
+            Image.open(io.BytesIO(image_bytes)).verify()
+        except Exception:
+            raise HTTPException(status_code=400, detail="The ultrasound file is not a readable image.")
+
+    ext = IMAGE_EXTENSIONS.get(ultrasound.content_type, "") if image_bytes else ""
+    return _run_assessment(data, user, image_bytes, ext)
 
 
 # --------------------------------------------------------------------------- #
@@ -281,7 +379,7 @@ def doctor_assessments(user: dict = Depends(require_role("doctor", "counselor", 
     # availability only gate counselors. A doctor who's marked themselves
     # unavailable still sees and can act on every patient's report.
     rows = db.get_all_assessments() if user["role"] in ("admin", "doctor") else db.get_assessments_for_provider(user["id"])
-    counts = {"Low": 0, "Moderate": 0, "High": 0}
+    counts = {"Low": 0, "High": 0}
     for r in rows:
         counts[r["risk_level"]] = counts.get(r["risk_level"], 0) + 1
     return {"assessments": rows, "counts": counts, "total": len(rows)}
@@ -290,9 +388,7 @@ def doctor_assessments(user: dict = Depends(require_role("doctor", "counselor", 
 # --------------------------------------------------------------------------- #
 # Assessment detail (for downloadable reports) — doctor/admin or owning patient
 # --------------------------------------------------------------------------- #
-@app.get("/api/assessments/{assessment_id}")
-def assessment_detail(assessment_id: int,
-                      user: dict = Depends(get_current_user)) -> dict:
+def _get_authorised_assessment(assessment_id: int, user: dict) -> dict:
     record = db.get_assessment(assessment_id)
     if not record:
         raise HTTPException(status_code=404, detail="Assessment not found.")
@@ -307,9 +403,18 @@ def assessment_detail(assessment_id: int,
             raise HTTPException(status_code=403, detail="Not authorised to view this record.")
     elif record.get("user_id") != user["id"]:
         raise HTTPException(status_code=403, detail="Not authorised to view this record.")
+    return record
+
+
+@app.get("/api/assessments/{assessment_id}")
+def assessment_detail(assessment_id: int,
+                      user: dict = Depends(get_current_user)) -> dict:
+    record = _get_authorised_assessment(assessment_id, user)
 
     recommendations = json.loads(record["recommendations"]) if record.get("recommendations") else []
     responses = json.loads(record["details"]) if record.get("details") else None
+    # Expose only whether a scan exists, not its stored file name.
+    has_ultrasound_image = bool(responses and responses.pop("ultrasound_image", None))
     return {
         "id": record["id"],
         "created_at": record["created_at"],
@@ -320,8 +425,21 @@ def assessment_detail(assessment_id: int,
         "risk_level": record["risk_level"],
         "recommendations": recommendations,
         "responses": responses,
+        "has_ultrasound_image": has_ultrasound_image,
         "disclaimer": DISCLAIMER,
     }
+
+
+@app.get("/api/assessments/{assessment_id}/ultrasound")
+def assessment_ultrasound(assessment_id: int,
+                          user: dict = Depends(get_current_user)) -> FileResponse:
+    record = _get_authorised_assessment(assessment_id, user)
+    details = json.loads(record["details"]) if record.get("details") else {}
+    stored_name = details.get("ultrasound_image")
+    path = os.path.join(ULTRASOUND_DIR, os.path.basename(stored_name or ""))
+    if not stored_name or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="No ultrasound image for this assessment.")
+    return FileResponse(path)
 
 
 # --------------------------------------------------------------------------- #
@@ -346,7 +464,7 @@ async def upload_prescription(
         raise HTTPException(status_code=400, detail="File exceeds the 10 MB limit.")
 
     # Only allow attaching to a real patient account. Counselors may only
-    # upload for High-risk patients who selected them — Moderate/Low risk
+    # upload for High-risk patients who selected them — Low risk
     # stays doctor-only, regardless of who's assigned. Doctors and admins can
     # always upload for any patient (a doctor's prescription takes priority —
     # see below).
