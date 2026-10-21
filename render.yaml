@@ -35,4 +35,5 @@ services:
       - key: DB_PASSWORD
         sync: false
       - key: DB_NAME
-        value: "pcos_care"
+        sync: false          # the database your MySQL host gave you (on
+                             # freesqldatabase.com it matches the username)

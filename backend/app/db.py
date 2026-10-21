@@ -23,6 +23,8 @@ DB_USER = os.getenv("DB_USER", "root")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_NAME = os.getenv("DB_NAME", "pcos_care")
 
+ER_ACCESS_DENIED = 1045  # MySQL: wrong user or password
+
 
 class _Connection:
     """Thin shim over a PyMySQL connection so call sites can keep using the
@@ -55,6 +57,12 @@ def _ensure_database(retries: int = 10, delay_seconds: float = 2.0) -> None:
             conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD)
             break
         except pymysql.err.OperationalError as exc:
+            # A rejected login won't fix itself by retrying.
+            if exc.args and exc.args[0] == ER_ACCESS_DENIED:
+                raise ConnectionError(
+                    f"MySQL at {DB_HOST}:{DB_PORT} rejected user '{DB_USER}'. "
+                    "Check the DB_USER and DB_PASSWORD settings."
+                ) from exc
             last_error = exc
             if attempt < retries - 1:
                 time.sleep(delay_seconds)
@@ -66,10 +74,14 @@ def _ensure_database(retries: int = 10, delay_seconds: float = 2.0) -> None:
 
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                f"CREATE DATABASE IF NOT EXISTS `{DB_NAME}` "
-                "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-            )
+            # Hosted MySQL plans usually give you one ready-made database and
+            # no CREATE DATABASE privilege, so only create it when missing.
+            cur.execute("SHOW DATABASES LIKE %s", (DB_NAME,))
+            if cur.fetchone() is None:
+                cur.execute(
+                    f"CREATE DATABASE `{DB_NAME}` "
+                    "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+                )
         conn.commit()
     finally:
         conn.close()
