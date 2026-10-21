@@ -26,6 +26,11 @@ services:
         sync: false          # set your own doctor password in the dashboard
       - key: ALLOWED_ORIGINS
         value: "*"
+      # No email provider: show the password-reset link on the Forgot
+      # password page. Demo use only — anyone who knows a user's email can
+      # reset their password. Set to "false" before real users sign up.
+      - key: SHOW_RESET_LINK
+        value: "true"
       - key: DB_HOST
         sync: false          # external MySQL host (XAMPP is local-dev only)
       - key: DB_PORT
