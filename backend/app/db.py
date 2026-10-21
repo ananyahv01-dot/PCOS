@@ -10,6 +10,7 @@ Start MySQL (via XAMPP, or `docker compose up`) before running the backend.
 from __future__ import annotations
 
 import os
+import ssl
 import time
 from contextlib import closing
 from datetime import datetime, timezone
@@ -24,6 +25,29 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_NAME = os.getenv("DB_NAME", "pcos_care")
 
 ER_ACCESS_DENIED = 1045  # MySQL: wrong user or password
+
+# Hosted MySQL (e.g. Aiven) only accepts TLS connections. DB_SSL_CA is the
+# provider's CA certificate — either a file path or the PEM text itself, so
+# it can be pasted straight into a hosting dashboard's env var. Setting it
+# turns SSL on; DB_SSL=true alone encrypts without verifying the server.
+DB_SSL = os.getenv("DB_SSL", "false").lower() == "true"
+DB_SSL_CA = os.getenv("DB_SSL_CA", "").strip()
+
+
+def _ssl_context() -> ssl.SSLContext | None:
+    if DB_SSL_CA:
+        if DB_SSL_CA.startswith("-----BEGIN"):
+            return ssl.create_default_context(cadata=DB_SSL_CA)
+        return ssl.create_default_context(cafile=DB_SSL_CA)
+    if DB_SSL:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+    return None
+
+
+SSL_CONTEXT = _ssl_context()
 
 
 class _Connection:
@@ -54,7 +78,8 @@ def _ensure_database(retries: int = 10, delay_seconds: float = 2.0) -> None:
     last_error: Exception | None = None
     for attempt in range(retries):
         try:
-            conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD)
+            conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER,
+                                   password=DB_PASSWORD, ssl=SSL_CONTEXT)
             break
         except pymysql.err.OperationalError as exc:
             # A rejected login won't fix itself by retrying.
@@ -94,6 +119,7 @@ def _connect() -> _Connection:
         user=DB_USER,
         password=DB_PASSWORD,
         database=DB_NAME,
+        ssl=SSL_CONTEXT,
         cursorclass=pymysql.cursors.DictCursor,
         autocommit=False,
     )

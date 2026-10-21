@@ -29,11 +29,12 @@ services:
       - key: DB_HOST
         sync: false          # external MySQL host (XAMPP is local-dev only)
       - key: DB_PORT
-        value: "3306"
+        sync: false          # Aiven uses its own port (shown on the service page)
       - key: DB_USER
         sync: false
       - key: DB_PASSWORD
         sync: false
       - key: DB_NAME
-        sync: false          # the database your MySQL host gave you (on
-                             # freesqldatabase.com it matches the username)
+        sync: false          # e.g. "defaultdb" on Aiven
+      - key: DB_SSL_CA
+        sync: false          # Aiven: paste the CA certificate (ca.pem) text
