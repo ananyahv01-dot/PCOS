@@ -100,11 +100,6 @@ export default function AdminDashboard() {
     );
   }
 
-  const cm = metrics?.confusion_matrix || [
-    [0, 0],
-    [0, 0],
-  ];
-
   const riskData = stats
     ? Object.entries(stats.risk_distribution).map(([name, value]) => ({
         name,
@@ -182,7 +177,7 @@ export default function AdminDashboard() {
         />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <div className="mt-6">
         {/* Feature importance */}
         <div className="card">
           <h3 className="flex items-center gap-1.5 font-semibold text-slate-800">
@@ -205,42 +200,6 @@ export default function AdminDashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
-
-        {/* Confusion matrix */}
-        <div className="card">
-          <h3 className="flex items-center gap-1.5 font-semibold text-slate-800">
-            Confusion matrix
-            <InfoDot text="Breaks test predictions into correct vs. incorrect. Diagonal (green) = correct; off-diagonal (red) = errors. Bottom-left = missed PCOS cases (false negatives)." />
-          </h3>
-          <div className="mt-6 grid grid-cols-[80px_1fr_1fr] gap-2 text-center text-sm">
-            <div />
-            <div className="font-semibold text-slate-500">Pred: No</div>
-            <div className="font-semibold text-slate-500">Pred: Yes</div>
-
-            <div className="flex items-center justify-end pr-2 font-semibold text-slate-500">
-              Actual: No
-            </div>
-            <div className="rounded-lg bg-emerald-50 py-6 text-2xl font-bold text-emerald-700">
-              {cm[0][0]}
-            </div>
-            <div className="rounded-lg bg-red-50 py-6 text-2xl font-bold text-red-700">
-              {cm[0][1]}
-            </div>
-
-            <div className="flex items-center justify-end pr-2 font-semibold text-slate-500">
-              Actual: Yes
-            </div>
-            <div className="rounded-lg bg-red-50 py-6 text-2xl font-bold text-red-700">
-              {cm[1][0]}
-            </div>
-            <div className="rounded-lg bg-emerald-50 py-6 text-2xl font-bold text-emerald-700">
-              {cm[1][1]}
-            </div>
-          </div>
-          <p className="mt-4 text-xs text-slate-400">
-            Green = correct predictions, red = errors.
-          </p>
         </div>
       </div>
 
